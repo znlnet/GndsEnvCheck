@@ -8,6 +8,9 @@ import (
 	"github.com/Starainrt/stario"
 	"github.com/druidcaesa/gotool"
 	"github.com/go-ping/ping"
+	"github.com/google/gopacket/pcap"
+	"github.com/gookit/color"
+
 	//mynet "net"
 	"os"
 	"os/exec"
@@ -102,12 +105,27 @@ func myPrintln(a ...any) (n int, err error) {
 	writeLog(str, filename)
 	return fmt.Println(a)
 }
+func myErrPrintln(a ...any) {
+	str := fmt.Sprintln(a)
+	writeLog(str, filename)
+	color.Red.Println(a)
+}
+func myErrorPrintln(a ...any) {
+	str := fmt.Sprintln(a)
+	writeLog(str, filename)
+	color.Error.Println(a)
+}
+func mySuccessPrintln(a ...any) {
+	str := fmt.Sprintln(a)
+	writeLog(str, filename)
+	color.Success.Println(a)
+}
 
 func pingHost(hostname string, count int) bool {
 	pinger, err := ping.NewPinger(hostname)
 	if err != nil {
 		myPrintln("ERROR:", err)
-		return false
+		return true
 	}
 	if runtime.GOOS == "windows" {
 		pinger.SetPrivileged(true)
@@ -136,7 +154,7 @@ func pingHost(hostname string, count int) bool {
 	err = pinger.Run() // Blocks until finished.
 	if err != nil {
 		myPrintln("Failed to ping target host:", err)
-		return false
+		return true
 	}
 	stats := pinger.Statistics() // get send/receive/duplicate/rtt stats
 	return stats.PacketLoss > 0
@@ -215,6 +233,16 @@ func ipList() {
 	}
 }
 
+func pcapCheck() bool {
+	// 得到所有的(网络)设备
+	_, err := pcap.FindAllDevs()
+	if err != nil {
+		myPrintf("Pcap not install :%s\n", err)
+		return true
+	}
+	return false
+}
+
 func infoTest() {
 	myPrintln("========================Hardware Information=========================")
 	c, _ := cpu.Info()
@@ -256,63 +284,83 @@ func infoTest() {
 	flag := true
 
 	//API网关判断
-	lostGeelyApiPing := pingHost("gnds-api-cn.geely.com", 10)
+	lostGeekyApiPing := pingHost("gnds-api-cn.geely.com", 10)
+	//gnds-cdn
+	lostgndsCdn := pingHost("gnds-cdn.geely.com", 5)
+	//OTA
+	lostotaCdn := pingHost("otasea-cdn.geely.com", 5)
+
 	//互联网判断
 	lostNetPing := pingHost("www.qq.com", 5)
 	myPrintf("\n")
 	myPrintln("========================Non-conforming Items=========================")
-	if lostGeelyApiPing {
+	if lostGeekyApiPing {
 		flag = false
-		myPrintln("[NetWork]--->Your network cannot connect to the API server")
+		myErrPrintln("[NetWork]--->Your network cannot connect to the gnds-api-cn.geely.com")
+	}
+
+	if lostgndsCdn {
+		flag = false
+		myErrPrintln("[NetWork]--->Your network cannot connect to the gnds-cdn.geely.com")
+	}
+
+	if lostotaCdn {
+		flag = false
+		myErrPrintln("[NetWork]--->Your network cannot connect to the otasea-cdn.geely.com")
 	}
 
 	if lostNetPing {
 		flag = false
-		myPrintln("[NetWork]--->Your network cannot connect to the Internet")
+		myErrPrintln("[NetWork]--->Your network cannot connect to the Internet")
 	}
 
 	//操作系统判断
 	if !(strings.Contains(n.Platform, "Windows 10") || strings.Contains(n.Platform, "Windows 11")) {
 		flag = false
-		myPrintln("[OS]--->Your operating system is not Windows 10 or Windows 11")
+		myErrPrintln("[OS]--->Your operating system is not Windows 10 or Windows 11")
 	}
 
 	//CPU判断
 	if physicalCnt < 2 || logicalCnt < 4 {
 		flag = false
-		myPrintln("[CPU]--->The CPU has at least 2 physical cores and at least 4 logical cores")
+		myErrPrintln("[CPU]--->The CPU has at least 2 physical cores and at least 4 logical cores")
 	}
 
 	//内存判断
 	if v.Total/1024/1024 < 8192 {
 		flag = false
-		myPrintln("[Memory]--->Total system memory at least 8GB")
+		myErrPrintln("[Memory]--->Total system memory at least 8GB")
 	}
 
 	//可用硬盘空间判断
 	if diskFree/1024/1024/1024 < 40 {
 		flag = false
-		myPrintln("[Disk]--->The disk has less than 40GB of free space")
+		myErrPrintln("[Disk]--->The disk has less than 40GB of free space")
 	}
 
 	//总硬盘空间判断
 	if diskTotal/1024/1024/1024 < 400 {
 		flag = false
-		myPrintln("[Disk]--->The disk has less than 400GB of total space")
+		myErrPrintln("[Disk]--->The disk has less than 400GB of total space")
+	}
+
+	if pcapCheck() {
+		flag = false
+		myErrPrintln("[PCAP]--->Pcap drive not load, please reinstall win10pcap")
 	}
 
 	//Pcap文件判断
 	if runtime.GOOS == "windows" && isDir("c:\\Windows\\System32\\packet.dll") {
 		flag = false
-		myPrintln("[PCAP]--->Pcap not install, please install win10pcap")
+		myErrPrintln("[PCAP]--->Pcap not install, please install win10pcap")
 	}
 	myPrintln("=====================================================================")
 	myPrintf("\n")
 	myPrintln("======================Test Result==========================")
 	if flag {
-		myPrintln("Success!!! This computer can be installed the GNDS client normally!")
+		mySuccessPrintln("Success!!! This computer can be installed the GNDS client normally!")
 	} else {
-		myPrintln("Fail!!! This computer cannot be properly used for the GNDS client!")
+		myErrorPrintln("Fail!!! This computer cannot be properly used for the GNDS client!")
 	}
 	myPrintln("===========================================================")
 
